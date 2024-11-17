@@ -56,3 +56,11 @@ class LoginRequest(BaseModel):
 
 class LoginResponse(BaseModel):
     message: str
+
+class AlumnoUpdate(BaseModel):
+    nombre: Optional[str] = None
+    apellido: Optional[str] = None
+    fecha_nacimiento: Optional[str] = None
+    telefono: Optional[str] = None
+    correo: Optional[str] = None
+    contraseña: Optional[str] = None

@@ -1,7 +1,7 @@
 from fastapi import FastAPI, HTTPException, Depends
 from database import get_db_connection
 from fastapi.middleware.cors import CORSMiddleware
-from schemas import ActividadPost, ActividadUpdate, TurnoPost, AlumnoPost, AlumnoResponse, ClaseResponse, AlumnoClaseRequest, LoginRequest, LoginResponse
+from schemas import ActividadPost, ActividadUpdate, AlumnoUpdate, TurnoPost, AlumnoPost, AlumnoResponse, ClaseResponse, AlumnoClaseRequest, LoginRequest, LoginResponse
 import datetime
 
 app = FastAPI()
@@ -261,6 +261,57 @@ async def delete_alumno(ci_alumno: int, db=Depends(get_db)):
         return {"message": "Alumno eliminado exitosamente", "ci_alumno": ci_alumno} 
 
 
+#Modificar datos de alumno
+@app.put("/alumnos/{ci_alumno}")
+async def update_alumno(ci_alumno: int, alumno: AlumnoUpdate, db=Depends(get_db)):
+        cursor = db.cursor()
+
+        cursor.execute("SELECT * FROM alumnos WHERE ci_alumno = %s", (ci_alumno,))
+        existe_alumno = cursor.fetchone()
+
+        if not existe_alumno:
+            raise HTTPException(status_code=404, detail="Alumno no encontrado.")
+
+        update_fields = []
+        values = []
+
+        if alumno.nombre:
+            update_fields.append("nombre = %s")
+            values.append(alumno.nombre)
+
+        if alumno.apellido:
+            update_fields.append("apellido = %s")
+            values.append(alumno.apellido)
+
+        if alumno.fecha_nacimiento:
+            update_fields.append("fecha_nacimiento = %s")
+            values.append(alumno.fecha_nacimiento)
+
+        if alumno.telefono:
+            update_fields.append("telefono = %s")
+            values.append(alumno.telefono)
+
+        if alumno.correo:
+            update_fields.append("correo = %s")
+            values.append(alumno.correo)
+
+        if alumno.contraseña:
+            update_fields.append("contraseña = %s")
+            values.append(alumno.contraseña)
+
+        if not update_fields:
+            raise HTTPException(status_code=400, detail="No se proporcionaron datos para actualizar.")
+
+        values.append(ci_alumno)
+
+        query = f"UPDATE alumnos SET {', '.join(update_fields)} WHERE ci_alumno = %s"
+        cursor.execute(query, tuple(values))
+        db.commit()  
+        cursor.close()
+        db.close()
+        return {"message": "Alumno actualizado exitosamente", "ci_alumno": ci_alumno}
+
+
 #############################################################################################
 #                               INSTRUCTORES                                                #
 #############################################################################################
@@ -365,15 +416,15 @@ async def delete_alumno(ci_alumno: int, db=Depends(get_db)):
 @app.post("/login", response_model=LoginResponse)
 async def login(login_data: LoginRequest, db=Depends(get_db)):
 
-        cursor = db.cursor()
+    cursor = db.cursor()
 
-        cursor.execute("SELECT * FROM alumnos WHERE correo = %s AND contraseña = %s", (login_data.correo, login_data.contraseña, ))
-        db_usuario = cursor.fetchone()
+    cursor.execute("SELECT * FROM alumnos WHERE correo = %s AND contraseña = %s", (login_data.correo, login_data.contraseña, ))
+    db_usuario = cursor.fetchone()
 
-        if not db_usuario:  # Supongamos que la contraseña está en la columna 2
-            raise HTTPException(status_code=401, detail="Credenciales incorrectas")
+    if not db_usuario:  # Supongamos que la contraseña está en la columna 2
+        raise HTTPException(status_code=401, detail="Credenciales incorrectas")
 
-        return {"message": "Inicio de sesión exitoso"}
+    return {"message": "Inicio de sesión exitoso"}
 
 #############################################################################################
 #                               CLASES                                                      #
@@ -386,7 +437,6 @@ def get_clases(db = Depends(get_db)):
     
     cursor = db.cursor()
 
-    # aca devolver id_actividad en response y ya anda, el front deberia agarrarlo
     cursor.execute("""
         SELECT 
             c.id_clase,
@@ -407,8 +457,6 @@ def get_clases(db = Depends(get_db)):
     """)
     clases = cursor.fetchall()
 
-    print(clases)
-
     response = []
     for clase in clases:
         response.append(ClaseResponse(
@@ -423,12 +471,12 @@ def get_clases(db = Depends(get_db)):
 
     return response
 
+
 #Poder inscribirse a una clase
 @app.post("/inscribir_alumno")
 async def inscribir_alumno(alumno_clase: AlumnoClaseRequest, db = Depends(get_db)):
         cursor = db.cursor()
 
-        # Verificar si el alumno ya está inscrito en la clase
         cursor.execute(
             "SELECT * FROM alumno_clase WHERE id_clase = %s AND ci_alumno = %s",
             (alumno_clase.id_clase, alumno_clase.ci_alumno),
