@@ -1,7 +1,8 @@
 from fastapi import FastAPI, HTTPException, Depends
 from database import get_db_connection
 from fastapi.middleware.cors import CORSMiddleware
-from schemas import ActividadPost, ActividadUpdate, TurnoPost, AlumnoPost
+from schemas import ActividadPost, ActividadUpdate, TurnoPost, AlumnoPost, AlumnoResponse, ClaseResponse, AlumnoClaseRequest, LoginRequest, LoginResponse
+import datetime
 
 app = FastAPI()
 
@@ -12,7 +13,12 @@ def get_db():
     finally:
         connection.close()
 
-
+def format_time(timedelta):
+            total_seconds = int(timedelta.total_seconds())
+            hours = total_seconds // 3600
+            minutes = (total_seconds % 3600) // 60
+            seconds = total_seconds % 60
+            return f"{hours:02}:{minutes:02}:{seconds:02}" #setea los turnos con 2 digitos, si es 9 pasa a ser 09
 
 app.add_middleware(
     CORSMiddleware,
@@ -69,20 +75,16 @@ async def create_actividad(actividad: ActividadPost, db=Depends(get_db)):
 @app.delete("/actividades/{id_actividad}")
 async def delete_actividad(id_actividad: int, db=Depends(get_db)):
     cursor = db.cursor()
-    try:
-        query = "DELETE FROM actividades WHERE id_actividad = %s"
-        cursor.execute(query, (id_actividad,))
-        db.commit() 
+    query = "DELETE FROM actividades WHERE id_actividad = %s"
+    cursor.execute(query, (id_actividad,))
+    db.commit() 
+    cursor.close()
 
-        if cursor.rowcount == 0:
-            raise HTTPException(status_code=404, detail="Actividad no encontrada")
+    if cursor.rowcount == 0:
+        raise HTTPException(status_code=404, detail="Actividad no encontrada")
 
-        return {"detail": f"Actividad con id {id_actividad} eliminada exitosamente"}
-    except Exception as e:
-        db.rollback() 
-        raise HTTPException(status_code=500, detail=f"Error al eliminar la actividad: {e}")
-    finally:
-        cursor.close()
+    return {"detail": f"Actividad con id {id_actividad} eliminada exitosamente"}
+        
 
 
 #Editar una actividad
@@ -136,80 +138,61 @@ async def update_actividad(id_actividad: int, actividad: ActividadUpdate, db=Dep
 @app.get("/turnos")
 async def get_turnos(db=Depends(get_db)):
     cursor = db.cursor()
-    try:
-        query = "SELECT id_turno, hora_inicio, hora_fin FROM turnos"
-        cursor.execute(query)
-        turnos = cursor.fetchall()
+    query = "SELECT id_turno, hora_inicio, hora_fin FROM turnos"
+    cursor.execute(query)
+    turnos = cursor.fetchall()
 
-        if not turnos:
-            raise HTTPException(status_code=404, detail="No se encontraron turnos")
+    if not turnos:
+        raise HTTPException(status_code=404, detail="No se encontraron turnos")
 
-        def format_time(timedelta):
-            total_seconds = int(timedelta.total_seconds())
-            hours = total_seconds // 3600
-            minutes = (total_seconds % 3600) // 60
-            seconds = total_seconds % 60
-            return f"{hours:02}:{minutes:02}:{seconds:02}" #setea los turnos con 2 digitos, si es 9 pasa a ser 09
-        
-        turnos_list = []
-        for turno in turnos:
-            turnos_list.append({
-                "id_turno": turno[0],
-                "hora_inicio": format_time(turno[1]),
-                "hora_fin": format_time(turno[2]),
-            })
-        return turnos_list
+    def format_time(timedelta):
+        total_seconds = int(timedelta.total_seconds())
+        hours = total_seconds // 3600
+        minutes = (total_seconds % 3600) // 60
+        seconds = total_seconds % 60
+        return f"{hours:02}:{minutes:02}:{seconds:02}" #setea los turnos con 2 digitos, si es 9 pasa a ser 09
     
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error al obtener los turnos: {e}")
-    finally:
-        cursor.close()
+    turnos_list = []
+    for turno in turnos:
+        turnos_list.append({
+            "id_turno": turno[0],
+            "hora_inicio": format_time(turno[1]),
+            "hora_fin": format_time(turno[2]),
+        })
+    cursor.close()
+    return turnos_list
+
 
 
 #Agregar turnos
 @app.post("/turnos")
 async def create_turno(turno: TurnoPost, db=Depends(get_db)):
     cursor = db.cursor()
-    try:
-        query = """
-        INSERT INTO turnos (hora_inicio, hora_fin)
-        VALUES (%s, %s)
-        """
-        cursor.execute(query, (turno.hora_inicio, turno.hora_fin))
-        db.commit() 
+    query = """
+    INSERT INTO turnos (hora_inicio, hora_fin)
+    VALUES (%s, %s)
+    """
+    cursor.execute(query, (turno.hora_inicio, turno.hora_fin))
+    db.commit() 
+    cursor.close()
 
-        nuevo_id = cursor.lastrowid
+    nuevo_id = cursor.lastrowid
 
-        return {"id_turno": nuevo_id, "hora_inicio": turno.hora_inicio, "hora_fin": turno.hora_fin}
-
-    except Exception as e:
-        db.rollback() 
-        raise HTTPException(status_code=500, detail=f"Error al crear el turno: {e}")
-    
-    finally:
-        cursor.close()
-
+    return {"id_turno": nuevo_id, "hora_inicio": turno.hora_inicio, "hora_fin": turno.hora_fin}
 
 #Eliminar turno
 @app.delete("/turnos/{id_turno}")
 async def delete_turno(id_turno: int, db=Depends(get_db)):
     cursor = db.cursor()
-    try:
-        query = "DELETE FROM turnos WHERE id_turno = %s"
-        cursor.execute(query, (id_turno,))
-        
-        if cursor.rowcount == 0:
-            raise HTTPException(status_code=404, detail="Turno no encontrado")
-        
-        db.commit() 
-        return {"message": f"Turno con id {id_turno} eliminado con éxito"}
-
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(status_code=500, detail=f"Error al eliminar el turno: {e}")
+    query = "DELETE FROM turnos WHERE id_turno = %s"
+    cursor.execute(query, (id_turno,))
     
-    finally:
-        cursor.close()
+    if cursor.rowcount == 0:
+        raise HTTPException(status_code=404, detail="Turno no encontrado")
+    
+    db.commit() 
+    cursor.close()
+    return {"message": f"Turno con id {id_turno} eliminado con éxito"}
 
 
 #############################################################################################
@@ -219,7 +202,6 @@ async def delete_turno(id_turno: int, db=Depends(get_db)):
 #Obtener alumnos
 @app.get("/alumnos")
 async def get_alumnos(db=Depends(get_db)):
-    try:
         cursor = db.cursor(dictionary=True)        
         cursor.execute("SELECT * FROM alumnos")
         alumnos = cursor.fetchall()
@@ -232,17 +214,9 @@ async def get_alumnos(db=Depends(get_db)):
 
         return alumnos
 
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error al obtener los turnos: {e}")
-    finally:
-        cursor.close()
-
-
-
 #Agregar alumno
 @app.post("/alumnos")
 async def create_alumno(alumno: AlumnoPost, db=Depends(get_db)):
-    try:
         cursor = db.cursor()
         cursor.execute("SELECT * FROM alumnos WHERE ci_alumno = %s", (alumno.ci_alumno,))
         existing_alumno = cursor.fetchone()
@@ -264,17 +238,10 @@ async def create_alumno(alumno: AlumnoPost, db=Depends(get_db)):
 
         return {"message": "Alumno creado exitosamente", "ci_alumno": alumno.ci_alumno}
 
-    except Exception as e:
-        db.rollback()  
-        raise HTTPException(status_code=500, detail=f"Error al crear el alumno: {e}")
-    finally:
-        cursor.close()
-
 
 #Eliminar alumno
 @app.delete("/alumnos/{ci_alumno}")
 async def delete_alumno(ci_alumno: int, db=Depends(get_db)):
-    try:
         cursor = db.cursor()
 
         cursor.execute("SELECT * FROM alumnos WHERE ci_alumno = %s", (ci_alumno,))
@@ -284,6 +251,97 @@ async def delete_alumno(ci_alumno: int, db=Depends(get_db)):
             raise HTTPException(status_code=404, detail="Alumno no encontrado")
 
         query = "DELETE FROM alumnos WHERE ci_alumno = %s"
+        cursor.execute(query, (ci_alumno,))
+
+        db.commit()  
+
+        cursor.close()
+        db.close()
+
+        return {"message": "Alumno eliminado exitosamente", "ci_alumno": ci_alumno} 
+
+
+#############################################################################################
+#                               INSTRUCTORES                                                #
+#############################################################################################
+
+#Obtener los instructores
+@app.get("/instructores")
+async def get_alumnos(db=Depends(get_db)):
+        cursor = db.cursor(dictionary=True)        
+        cursor.execute("SELECT * FROM instructores")
+        instructores = cursor.fetchall()
+
+        if not instructores:
+            raise HTTPException(status_code=404, detail="No hay instructores disponibles.")
+        
+        cursor.close()
+        db.close()
+
+        return instructores
+
+#############################################################################################
+#                               REGISTRO                                                    #
+#############################################################################################
+
+#Registra un alumno y guarda la cedula, correo y contraseña en la tabla login
+@app.post("/register", response_model=AlumnoResponse)
+async def register_alumno(alumno: AlumnoPost, db = Depends(get_db)):
+    cursor = db.cursor()
+    cursor.execute("SELECT * FROM alumnos WHERE ci_alumno = %s", (alumno.ci_alumno,))
+    existing_alumno = cursor.fetchone()
+
+    if existing_alumno:
+        raise HTTPException(status_code=400, detail="El alumno ya existe en la base de datos.")
+
+    query = """
+        INSERT INTO alumnos (ci_alumno, nombre, apellido, fecha_nacimiento, telefono, correo, contraseña)
+        VALUES (%s, %s, %s, %s, %s, %s, %s)
+    """
+    values = (alumno.ci_alumno, alumno.nombre, alumno.apellido, alumno.fecha_nacimiento, alumno.telefono, alumno.correo, alumno.contraseña)
+
+    cursor.execute(query, values)
+    db.commit()  
+
+    query = """
+        INSERT INTO login (correo, contraseña, ci_alumno)
+        VALUES (%s, %s, %s)
+    """
+    values = (alumno.correo, alumno.contraseña, alumno.ci_alumno)
+
+    cursor.execute(query, values)
+    db.commit()
+
+    cursor.close()
+    db.close()
+
+    return AlumnoResponse(
+            ci_alumno=alumno.ci_alumno,
+            nombre=alumno.nombre,
+            apellido=alumno.apellido,
+            fecha_nacimiento=alumno.fecha_nacimiento,
+            telefono=alumno.telefono,
+            correo=alumno.correo,
+            contraseña=alumno.contraseña,
+        )
+
+
+#############################################################################################
+#                              ELIMINAR DE TABLA LOGIN                                      #
+#############################################################################################
+
+@app.delete("/login/{ci_alumno}")
+async def delete_alumno(ci_alumno: int, db=Depends(get_db)):
+    try:
+        cursor = db.cursor()
+
+        cursor.execute("SELECT * FROM login WHERE ci_alumno = %s", (ci_alumno,))
+        alumno = cursor.fetchone()
+
+        if not alumno:
+            raise HTTPException(status_code=404, detail="Alumno no encontrado")
+
+        query = "DELETE FROM login WHERE ci_alumno = %s"
         cursor.execute(query, (ci_alumno,))
 
         db.commit()  
@@ -301,26 +359,119 @@ async def delete_alumno(ci_alumno: int, db=Depends(get_db)):
 
 
 #############################################################################################
-#                               INSTRUCTORES                                                #
+#                               LOGIN                                                       #
 #############################################################################################
 
-#Obtener los instructores
-@app.get("/instructores")
-async def get_alumnos(db=Depends(get_db)):
-    try:
-        cursor = db.cursor(dictionary=True)        
-        cursor.execute("SELECT * FROM instructores")
-        instructores = cursor.fetchall()
+@app.post("/login", response_model=LoginResponse)
+async def login(login_data: LoginRequest, db=Depends(get_db)):
 
-        if not instructores:
-            raise HTTPException(status_code=404, detail="No hay instructores disponibles.")
+        cursor = db.cursor()
+
+        cursor.execute("SELECT * FROM alumnos WHERE correo = %s AND contraseña = %s", (login_data.correo, login_data.contraseña, ))
+        db_usuario = cursor.fetchone()
+
+        if not db_usuario:  # Supongamos que la contraseña está en la columna 2
+            raise HTTPException(status_code=401, detail="Credenciales incorrectas")
+
+        return {"message": "Inicio de sesión exitoso"}
+
+#############################################################################################
+#                               CLASES                                                      #
+#############################################################################################
+
+
+#Mostrar clases
+@app.get("/clases", response_model=list[ClaseResponse])
+def get_clases(db = Depends(get_db)):
+    
+    cursor = db.cursor()
+
+    # aca devolver id_actividad en response y ya anda, el front deberia agarrarlo
+    cursor.execute("""
+        SELECT 
+            c.id_clase,
+            c.id_actividad,
+            a.nombre AS nombre_actividad,
+            a.costo AS costo_actividad,
+            i.nombre AS nombre_instructor,
+            t.hora_inicio AS hora_inicio,
+            t.hora_fin AS hora_fin
+        FROM 
+            clase c
+        JOIN 
+            actividades a ON c.id_actividad = a.id_actividad
+        JOIN 
+            instructores i ON c.ci_instructor = i.ci_instructor
+        JOIN 
+            turnos t ON c.id_turno = t.id_turno;
+    """)
+    clases = cursor.fetchall()
+
+    print(clases)
+
+    response = []
+    for clase in clases:
+        response.append(ClaseResponse(
+            id_clase=clase[0],
+            id_actividad = clase[1],
+            nombre_actividad=clase[2],
+            nombre_instructor=clase[4],
+            hora_inicio=format_time(clase[5]),
+            hora_fin=format_time(clase[6]),
+            costo_actividad=clase[3]
+        ))
+
+    return response
+
+#Poder inscribirse a una clase
+@app.post("/inscribir_alumno")
+async def inscribir_alumno(alumno_clase: AlumnoClaseRequest, db = Depends(get_db)):
+        cursor = db.cursor()
+
+        # Verificar si el alumno ya está inscrito en la clase
+        cursor.execute(
+            "SELECT * FROM alumno_clase WHERE id_clase = %s AND ci_alumno = %s",
+            (alumno_clase.id_clase, alumno_clase.ci_alumno),
+        )
+        existe = cursor.fetchone()
+
+        if existe:
+            raise HTTPException(status_code=400, detail="El alumno ya está inscrito en esta clase.")
+
+        if alumno_clase.id_equipamiento is not None:
+            query = """
+                INSERT INTO alumno_clase (id_clase, ci_alumno, id_equipamiento)
+                VALUES (%s, %s, %s)
+            """
+            values = (alumno_clase.id_clase, alumno_clase.ci_alumno, alumno_clase.id_equipamiento)
+        else:
+            query = """
+                INSERT INTO alumno_clase (id_clase, ci_alumno)
+                VALUES (%s, %s)
+            """
+            values = (alumno_clase.id_clase, alumno_clase.ci_alumno)
+        cursor.execute(query, values)
+
+        db.commit()
+
+        return {"message": "Alumno inscrito correctamente.", "data": alumno_clase}
+
+
+#############################################################################################
+#                               EQUIPAMIENTO                                                #
+#############################################################################################
+
+#Obtener equipamiento
+@app.get("/equipamiento")
+async def get_alumnos(db=Depends(get_db)):
+        cursor = db.cursor(dictionary=True)        
+        cursor.execute("SELECT * FROM equipamiento")
+        equipamiento = cursor.fetchall()
+
+        if not equipamiento:
+            raise HTTPException(status_code=404, detail="No hay equipamiento disponibles.")
         
         cursor.close()
         db.close()
 
-        return instructores
-
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error al obtener los instructores: {e}")
-    finally:
-        cursor.close()
+        return equipamiento

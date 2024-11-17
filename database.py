@@ -1,6 +1,5 @@
 import mysql.connector
 
-# Configuración de conexión
 db_config = {
     "host": "localhost",
     "user": "root",
@@ -9,7 +8,6 @@ db_config = {
 }
 
 def get_db_connection():
-    """Establece una conexión con la base de datos."""
     try:
         connection = mysql.connector.connect(**db_config)
         return connection
