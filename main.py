@@ -457,6 +457,80 @@ async def inscribir_alumno(alumno_clase: AlumnoClaseRequest, db = Depends(get_db
         return {"message": "Alumno inscrito correctamente.", "data": alumno_clase}
 
 
+#Eliminar alumno de clase
+@app.delete("/desinscribir_alumno/{id_clase}/{ci_alumno}")
+def desinscribir_alumno(ci_alumno: int, id_clase: int, db=Depends(get_db)):
+    cursor=db.cursor()
+
+    cursor.execute("SELECT * FROM alumno_clase WHERE ci_alumno = %s AND id_clase = %s",
+            (ci_alumno, id_clase),)
+     
+    inscripcion = cursor.fetchone()
+    if not inscripcion:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No se encontró la inscripción del alumno {ci_alumno} en la clase {id_clase}.",
+        )
+     
+    cursor.execute("DELETE FROM alumno_clase WHERE ci_alumno = %s AND id_clase = %s",
+        (ci_alumno, id_clase),)
+    db.commit()
+     
+    return {
+        "message": "Alumno desinscrito correctamente.",
+        "ci_alumno": ci_alumno,
+        "id_clase": id_clase,
+    }
+
+
+#Obtener las clases inscriptas de un alumno
+@app.get("/clases_alumno/{ci_alumno}")
+def get_clases_alumno(ci_alumno: int, db=Depends(get_db)):
+    cursor = db.cursor()
+    query = """
+            SELECT 
+                ac.id_clase,
+                a.nombre AS nombre_actividad,
+                i.nombre AS nombre_instructor,
+                t.hora_inicio,
+                t.hora_fin
+            FROM 
+                alumno_clase ac
+            JOIN 
+                clase c ON ac.id_clase = c.id_clase
+            JOIN 
+                actividades a ON c.id_actividad = a.id_actividad
+            JOIN 
+                instructores i ON c.ci_instructor = i.ci_instructor
+            JOIN 
+                turnos t ON c.id_turno = t.id_turno
+            WHERE 
+                ac.ci_alumno = %s
+        """
+    cursor.execute(query, (ci_alumno,))
+    clases = cursor.fetchall()
+
+    if not clases:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No se encontraron clases para el alumno con CI {ci_alumno}.",
+    )
+
+    result = [
+            {
+                "id_clase": clase[0],
+                "nombre_actividad": clase[1],
+                "nombre_instructor": clase[2],
+                "hora_inicio": format_time(clase[3]),
+                "hora_fin": format_time(clase[4]),
+            }
+            for clase in clases
+        ]
+
+    return {"ci_alumno": ci_alumno, "clases_inscriptas": result}
+
+
+
 #############################################################################################
 #                               EQUIPAMIENTO                                                #
 #############################################################################################
@@ -475,3 +549,4 @@ async def get_alumnos(db=Depends(get_db)):
         db.close()
 
         return equipamiento
+

@@ -38,7 +38,7 @@ class AlumnoResponse(BaseModel):
     
 class ClaseResponse(BaseModel):
     id_clase: int
-    id_actividad: int
+    id_actividad: int   
     nombre_actividad: str
     nombre_instructor: str 
     hora_inicio: time
