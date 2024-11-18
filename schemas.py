@@ -64,3 +64,7 @@ class AlumnoUpdate(BaseModel):
     telefono: Optional[str] = None
     correo: Optional[str] = None
     contraseña: Optional[str] = None
+
+class ActividadCantidad(BaseModel):
+    actividad: str
+    cantidad_alumnos: int

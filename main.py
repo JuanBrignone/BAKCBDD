@@ -1,7 +1,7 @@
 from fastapi import FastAPI, HTTPException, Depends
 from database import get_db_connection
 from fastapi.middleware.cors import CORSMiddleware
-from schemas import ActividadPost, ActividadUpdate, AlumnoUpdate, TurnoPost, AlumnoPost, AlumnoResponse, ClaseResponse, AlumnoClaseRequest, LoginRequest, LoginResponse
+from schemas import ActividadPost, ActividadUpdate, ActividadCantidad, AlumnoUpdate, TurnoPost, AlumnoPost, AlumnoResponse, ClaseResponse, AlumnoClaseRequest, LoginRequest, LoginResponse
 import datetime
 
 app = FastAPI()
@@ -129,6 +129,45 @@ async def update_actividad(id_actividad: int, actividad: ActividadUpdate, db=Dep
     finally:
         cursor.close()
 
+
+@app.get("/actividades/populares", response_model=list[ActividadCantidad])
+async def get_actividades_populares(db=Depends(get_db)):
+    try:
+        cursor = db.cursor(dictionary=True)
+        
+        query = """
+        SELECT
+            a.nombre AS actividad,
+            COUNT(ac.ci_alumno) AS cantidad_alumnos
+        FROM
+            actividades a
+        JOIN
+            clase c ON a.id_actividad = c.id_actividad
+        JOIN
+            alumno_clase ac ON c.id_clase = ac.id_clase
+        GROUP BY
+            a.id_actividad
+        ORDER BY
+            cantidad_alumnos DESC;
+        """
+        
+        cursor.execute(query)
+        resultados = cursor.fetchall()
+
+        # Validar formato de respuesta (opcional)
+        for resultado in resultados:
+            if not isinstance(resultado["cantidad_alumnos"], int):
+                raise HTTPException(
+                    status_code=500, 
+                    detail="El campo 'cantidad_alumnos' no es un entero."
+                )
+
+        return resultados
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error al obtener datos: {e}")
+    finally:
+        cursor.close()
+        db.close()
 
 #############################################################################################
 #                               TURNOS                                                      #
@@ -597,4 +636,6 @@ async def get_alumnos(db=Depends(get_db)):
         db.close()
 
         return equipamiento
+
+
 
