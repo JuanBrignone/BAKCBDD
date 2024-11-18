@@ -130,6 +130,7 @@ async def update_actividad(id_actividad: int, actividad: ActividadUpdate, db=Dep
         cursor.close()
 
 
+#Obtener las actividades con la cantidad de alumnos inscriptos
 @app.get("/actividades/populares", response_model=list[ActividadCantidad])
 async def get_actividades_populares(db=Depends(get_db)):
     try:
@@ -153,14 +154,6 @@ async def get_actividades_populares(db=Depends(get_db)):
         
         cursor.execute(query)
         resultados = cursor.fetchall()
-
-        # Validar formato de respuesta (opcional)
-        for resultado in resultados:
-            if not isinstance(resultado["cantidad_alumnos"], int):
-                raise HTTPException(
-                    status_code=500, 
-                    detail="El campo 'cantidad_alumnos' no es un entero."
-                )
 
         return resultados
     except Exception as e:
