@@ -1,7 +1,7 @@
 from fastapi import FastAPI, HTTPException, Depends
 from database import get_db_connection
 from fastapi.middleware.cors import CORSMiddleware
-from schemas import ActividadPost, ActividadUpdate, ActividadCantidad, AlumnoUpdate, TurnoPost, AlumnoPost, AlumnoResponse, ClaseResponse, AlumnoClaseRequest, LoginRequest, LoginResponse
+from schemas import ActividadPost, InstructorPost, ClasePost, ActividadUpdate, ActividadCantidad, AlumnoUpdate, TurnoPost, AlumnoPost, AlumnoResponse, ClaseResponse, AlumnoClaseRequest, LoginRequest, LoginResponse
 import datetime
 
 app = FastAPI()
@@ -12,6 +12,7 @@ def get_db():
         yield connection
     finally:
         connection.close()
+
 
 def format_time(timedelta):
             total_seconds = int(timedelta.total_seconds())
@@ -75,6 +76,9 @@ async def create_actividad(actividad: ActividadPost, db=Depends(get_db)):
 @app.delete("/actividades/{id_actividad}")
 async def delete_actividad(id_actividad: int, db=Depends(get_db)):
     cursor = db.cursor()
+    query_delete_clases = "DELETE FROM clase WHERE id_actividad = %s"
+    cursor.execute(query_delete_clases, (id_actividad,)) #elimina todas las clases de esa actividad
+    db.commit()
     query = "DELETE FROM actividades WHERE id_actividad = %s"
     cursor.execute(query, (id_actividad,))
     db.commit() 
@@ -162,6 +166,8 @@ async def get_actividades_populares(db=Depends(get_db)):
         cursor.close()
         db.close()
 
+
+
 #############################################################################################
 #                               TURNOS                                                      #
 #############################################################################################
@@ -182,8 +188,7 @@ async def get_turnos(db=Depends(get_db)):
         hours = total_seconds // 3600
         minutes = (total_seconds % 3600) // 60
         seconds = total_seconds % 60
-        return f"{hours:02}:{minutes:02}:{seconds:02}" #setea los turnos con 2 digitos, si es 9 pasa a ser 09
-    
+        return f"{hours:02}:{minutes:02}:{seconds:02}" 
     turnos_list = []
     for turno in turnos:
         turnos_list.append({
@@ -363,6 +368,31 @@ async def get_alumnos(db=Depends(get_db)):
 
         return instructores
 
+@app.post("/instructores")
+async def create_instructor(instructor: InstructorPost, db=Depends(get_db)):
+    cursor = db.cursor()
+
+    cursor.execute("SELECT ci_instructor FROM instructores WHERE ci_instructor = %s", (instructor.ci_instructor,))
+    existing_instructor = cursor.fetchone()
+
+    if existing_instructor:
+        raise HTTPException(status_code=400, detail="El instructor ya existe con ese CI.")
+
+    query = """
+        INSERT INTO instructores (ci_instructor, nombre, apellido)
+        VALUES (%s, %s, %s);
+    """
+    cursor.execute(query, (instructor.ci_instructor, instructor.nombre, instructor.apellido))
+    db.commit()
+    cursor.close()
+
+    return {
+        "ci_instructor": instructor.ci_instructor,
+        "nombre": instructor.nombre,
+        "apellido": instructor.apellido
+    }
+        
+
 #############################################################################################
 #                               REGISTRO                                                    #
 #############################################################################################
@@ -453,7 +483,7 @@ async def login(login_data: LoginRequest, db=Depends(get_db)):
     cursor.execute("SELECT * FROM alumnos WHERE correo = %s AND contraseña = %s", (login_data.correo, login_data.contraseña, ))
     db_usuario = cursor.fetchone()
 
-    if not db_usuario:  # Supongamos que la contraseña está en la columna 2
+    if not db_usuario:
         raise HTTPException(status_code=401, detail="Credenciales incorrectas")
 
     return {"message": "Inicio de sesión exitoso"}
@@ -609,7 +639,36 @@ def get_clases_alumno(ci_alumno: int, db=Depends(get_db)):
 
     return {"ci_alumno": ci_alumno, "clases_inscriptas": result}
 
+#Crear una clase
+@app.post("/clases")
+async def create_clase(clase: ClasePost, db=Depends(get_db)):
+    cursor = db.cursor()
 
+    cursor.execute("SELECT id_actividad FROM actividades WHERE nombre = %s", (clase.nombre_actividad,))
+    actividad = cursor.fetchone()
+
+    if not actividad:
+        raise HTTPException(status_code=404, detail="Actividad no encontrada")
+
+    id_actividad = actividad[0]
+
+    query = """
+        INSERT INTO clase (ci_instructor, id_actividad, id_turno, dictada)
+        VALUES (%s, %s, %s, %s);
+    """
+    cursor.execute(query, (clase.ci_instructor, id_actividad, clase.id_turno, clase.dictada))
+    db.commit()
+    cursor.close()
+
+    id_clase = cursor.lastrowid
+
+    return {
+        "id_clase": id_clase,
+        "ci_instructor": clase.ci_instructor,
+        "nombre_actividad": clase.nombre_actividad,
+        "id_turno": clase.id_turno,
+        "dictada": clase.dictada
+    }
 
 #############################################################################################
 #                               EQUIPAMIENTO                                                #

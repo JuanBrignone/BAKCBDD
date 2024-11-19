@@ -68,3 +68,15 @@ class AlumnoUpdate(BaseModel):
 class ActividadCantidad(BaseModel):
     actividad: str
     cantidad_alumnos: int
+
+
+class ClasePost(BaseModel):
+    ci_instructor: int
+    nombre_actividad: str  
+    id_turno: int
+    dictada: bool
+
+class InstructorPost(BaseModel):
+    ci_instructor: int
+    nombre: str
+    apellido: str
