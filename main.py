@@ -231,6 +231,27 @@ async def delete_turno(id_turno: int, db=Depends(get_db)):
     cursor.close()
     return {"message": f"Turno con id {id_turno} eliminado con éxito"}
 
+#Obtener turnos con la cantidad de clases que se dictan
+@app.get("/turnos/clases")
+async def get_turnos_clases(db=Depends(get_db)):
+        cursor = db.cursor(dictionary=True)
+        query = """
+        SELECT
+            CONCAT(DATE_FORMAT(t.hora_inicio, '%H:%i'), ' - ', DATE_FORMAT(t.hora_fin, '%H:%i')) AS turno,
+            COUNT(c.id_clase) AS clases_dictadas
+        FROM
+            turnos t
+        JOIN
+            clase c ON t.id_turno = c.id_turno
+        GROUP BY
+            t.id_turno
+        ORDER BY
+            clases_dictadas DESC;
+        """
+        cursor.execute(query)
+        turnos_clases = cursor.fetchall()
+        cursor.close()
+        return turnos_clases
 
 #############################################################################################
 #                               ALUMNOS                                                     #
