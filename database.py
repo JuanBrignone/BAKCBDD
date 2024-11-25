@@ -4,7 +4,7 @@ db_config = {
     "host": "localhost",
     "user": "root",
     "password": "rootpassword",
-    "database": "Obligatorio 2024",
+    "database": "obligatorio2024",
 }
 
 def get_db_connection():
