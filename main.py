@@ -389,6 +389,7 @@ async def get_alumnos(db=Depends(get_db)):
 
         return instructores
 
+#Agregar instructores
 @app.post("/instructores")
 async def create_instructor(instructor: InstructorPost, db=Depends(get_db)):
     cursor = db.cursor()
@@ -412,7 +413,29 @@ async def create_instructor(instructor: InstructorPost, db=Depends(get_db)):
         "nombre": instructor.nombre,
         "apellido": instructor.apellido
     }
-        
+
+
+#Eliminar Instructores
+@app.delete("/instructores/{ci_instructor}")
+async def delete_instructor(ci_instructor: int, db=Depends(get_db)):
+    cursor = db.cursor()
+
+    cursor.execute("SELECT * FROM instructores WHERE ci_instructor = %s", (ci_instructor,))
+    instructor = cursor.fetchone()
+
+    if not instructor:
+        cursor.close()
+        db.close()
+        raise HTTPException(status_code=404, detail="El instructor no existe.")
+
+    cursor.execute("DELETE FROM instructores WHERE ci_instructor = %s", (ci_instructor,))
+    db.commit()
+
+    cursor.close()
+    db.close()
+
+    return {"message": f"Instructor con CI {ci_instructor} eliminado exitosamente."}
+
 
 #############################################################################################
 #                               REGISTRO                                                    #
