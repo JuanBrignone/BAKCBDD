@@ -166,6 +166,41 @@ async def get_actividades_populares(db=Depends(get_db)):
         cursor.close()
         db.close()
 
+#Actividades con mas ingresos
+@app.get("/ingresos_totales")
+async def get_ingresos_totales(db=Depends(get_db)):
+    cursor = db.cursor(dictionary=True)
+
+    query = """
+    SELECT
+        a.nombre AS actividad,
+        SUM(a.costo + IFNULL(e.costo, 0)) AS ingresos_totales
+    FROM
+        actividades a
+    LEFT JOIN
+        equipamiento e ON a.id_actividad = e.id_actividad
+    GROUP BY
+        a.id_actividad
+    ORDER BY
+        ingresos_totales DESC;
+    """
+
+    try:
+        cursor.execute(query)
+        resultados = cursor.fetchall()
+
+        if not resultados:
+            raise HTTPException(status_code=404, detail="No se encontraron ingresos totales.")
+
+        return resultados
+
+    except Exception as err:
+        raise HTTPException(status_code=500, detail=f"Error de consulta: {err}")
+
+    finally:
+        cursor.close()
+        db.close()
+
 
 
 #############################################################################################
